@@ -1,0 +1,223 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>新闻图片生成器</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/fabric.js/5.3.0/fabric.min.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Libre+Baskerville:wght@700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            margin: 20px auto;
+            padding: 0 20px;
+            max-width: 1918px;
+            background: #f6f6f6;
+            font-family: Arial, sans-serif;
+        }
+
+        .controls {
+            margin: 25px 0;
+            padding: 20px;
+            background: white;
+            border-radius: 10px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        }
+
+        button {
+            padding: 12px 28px;
+            margin: 0 10px;
+            background: #1a73e8;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            transition: background 0.3s;
+            font-size: 16px;
+        }
+
+        button:hover {
+            background: #1557b0;
+        }
+
+        input[type="file"] {
+            margin: 15px 0;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            width: 300px;
+        }
+
+        #main-canvas {
+            box-shadow: 0 4px 20px rgba(0,0,0,0.15);
+            background: white;
+        }
+    </style>
+</head>
+<body>
+    <h1>NOT WHITE HOUSE 📰</h1>
+    
+    <div class="controls">
+        <input type="file" id="image-upload" accept="image/*">
+        <input type="text" id="title-input" placeholder="输入新闻标题" style="padding: 10px; width: 300px;">
+        <button onclick="updateTitle()">更新标题</button>
+        <button onclick="saveImage()">保存高清图片</button>
+    </div>
+
+    <canvas id="main-canvas" width="1918" height="799"></canvas>
+
+    <script>
+        // ================= 配置区 =================
+        const CONFIG = {
+            canvas: {
+                width: 1918,
+                height: 799,
+                bgColor: '#ffffff'
+            },
+            
+            background: {
+                url: 'https://i.ibb.co/jvgnCNpz/20250309-002125.jpg'
+            },
+            
+            image: {
+                defaultScale: 0.5,  // 初始缩放比例
+                minScale: 0.2,      // 最小缩放
+                maxScale: 1.5       // 最大缩放
+            },
+            
+            title: {
+                defaultText: 'AMERICA IS BACK',
+                position: { left: 360, top: 140 },
+                style: {
+                    fontSize: 92,
+                    fill: '#ffffff',  // 白色字体
+                    fontFamily: "'Libre Baskerville', serif",
+                    fontWeight: 700,
+                    width: 1000,
+                    shadow: {
+                        color: 'rgba(0,0,0,0.8)',  // 深色阴影
+                        offsetX: 2,
+                        offsetY: 2,
+                        blur: 4
+                    },
+                    textBackgroundColor: 'rgba(0,0,0,0.3)'  // 半透明背景
+                }
+            }
+        };
+
+        // ================= 初始化画布 =================
+        const canvas = new fabric.Canvas('main-canvas', {
+            preserveObjectStacking: true,
+            backgroundColor: CONFIG.canvas.bgColor
+        });
+
+        // 加载背景图
+        fabric.Image.fromURL(CONFIG.background.url, img => {
+            img.set({
+                scaleX: CONFIG.canvas.width / img.width,
+                scaleY: CONFIG.canvas.height / img.height,
+                selectable: false
+            });
+            canvas.setBackgroundImage(img, canvas.renderAll.bind(canvas));
+        });
+
+        // ================= 标题系统 =================
+        const newsTitle = new fabric.Textbox(CONFIG.title.defaultText, {
+            ...CONFIG.title.position,
+            ...CONFIG.title.style,
+            shadow: new fabric.Shadow(CONFIG.title.style.shadow),
+            textBackgroundColor: CONFIG.title.style.textBackgroundColor
+        });
+        canvas.add(newsTitle);
+        newsTitle.bringToFront();
+
+        function updateTitle() {
+            const newText = document.getElementById('title-input').value;
+            if (newText) {
+                newsTitle.set('text', newText.toUpperCase());
+                canvas.requestRenderAll();
+            }
+        }
+
+        // ================= 图片上传处理 =================
+        document.getElementById('image-upload').addEventListener('change', function(e) {
+            const file = e.target.files[0];
+            if (!file) return;
+
+            const reader = new FileReader();
+            reader.onload = async (event) => {
+                // 移除旧图片
+                canvas.getObjects().forEach(obj => {
+                    if (obj.isUploadedImage) canvas.remove(obj);
+                });
+
+                fabric.Image.fromURL(event.target.result, img => {
+                    // 计算初始缩放
+                    const initScale = Math.min(
+                        CONFIG.image.defaultScale,
+                        (CONFIG.canvas.width * 0.8) / img.width,
+                        (CONFIG.canvas.height * 0.8) / img.height
+                    );
+
+                    img.set({
+                        left: CONFIG.canvas.width / 2,
+                        top: CONFIG.canvas.height / 2,
+                        scaleX: initScale,
+                        scaleY: initScale,
+                        originX: 'center',
+                        originY: 'center',
+                        isUploadedImage: true,
+                        hasControls: true,
+                        lockUniScaling: true,  // 保持宽高比
+                        borderColor: '#1a73e8',
+                        cornerColor: '#1a73e8',
+                        cornerSize: 12,
+                        transparentCorners: false
+                    });
+
+                    canvas.add(img);
+                    img.sendToBack();
+                    newsTitle.bringToFront();
+                    canvas.requestRenderAll();
+                });
+            };
+            reader.readAsDataURL(file);
+        });
+
+        // ================= 保存图片功能 =================
+        function saveImage() {
+            // 检查画布内容
+            if (canvas.getObjects().length === 0) {
+                alert('画布中没有内容，请先上传图片并添加标题');
+                return;
+            }
+
+            // 取消选中状态
+            canvas.discardActiveObject();
+            
+            // 保存原始缩放状态
+            const originalZoom = canvas.getZoom();
+            canvas.setZoom(1);  // 重置缩放保证输出质量
+            
+            // 生成高清图片
+            const dataURL = canvas.toDataURL({
+                format: 'png',
+                quality: 1,
+                multiplier: CONFIG.canvas.width / canvas.getWidth()
+            });
+            
+            // 创建下载链接
+            const link = document.createElement('a');
+            link.download = `news-image-${Date.now()}.png`;
+            link.href = dataURL;
+            
+            // 触发下载
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            
+            // 恢复原始状态
+            canvas.setZoom(originalZoom);
+        }
+    </script>
+</body>
+</html>
